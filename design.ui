@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>980</width>
-    <height>594</height>
+    <width>656</width>
+    <height>571</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,37 +16,12 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0" colspan="6">
-     <widget class="QWidget" name="videoWidget" native="true">
+     <widget class="QLabel" name="videoWidget">
       <property name="styleSheet">
        <string notr="true">background-color: rgb(0, 0, 0);</string>
       </property>
-     </widget>
-    </item>
-    <item row="1" column="2">
-     <widget class="QPushButton" name="prevBtn">
       <property name="text">
-       <string>Prev Frame</string>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="4">
-     <widget class="QPushButton" name="pauseBtn">
-      <property name="text">
-       <string>Pause</string>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="3">
-     <widget class="QPushButton" name="playBtn">
-      <property name="text">
-       <string>Play</string>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="1">
-     <widget class="QPushButton" name="nextBtn">
-      <property name="text">
-       <string>Next Frame</string>
+       <string/>
       </property>
      </widget>
     </item>
@@ -57,10 +32,45 @@
       </property>
      </widget>
     </item>
+    <item row="1" column="1">
+     <widget class="QPushButton" name="nextBtn">
+      <property name="text">
+       <string>Next Frame</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="2">
+     <widget class="QPushButton" name="prevBtn">
+      <property name="text">
+       <string>Prev Frame</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="3">
+     <widget class="QPushButton" name="playBtn">
+      <property name="text">
+       <string>Play</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="4">
+     <widget class="QPushButton" name="pauseBtn">
+      <property name="text">
+       <string>Pause</string>
+      </property>
+     </widget>
+    </item>
     <item row="1" column="5">
      <widget class="QSlider" name="horizontalSlider">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0" colspan="2">
+     <widget class="QRadioButton" name="radioButton">
+      <property name="text">
+       <string>Цветное изображение</string>
       </property>
      </widget>
     </item>

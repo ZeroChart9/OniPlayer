@@ -15,7 +15,8 @@ while True:
     frame_depth_data = frame_depth.get_buffer_as_uint16()
     depth_array = np.ndarray((frame_depth.height, frame_depth.width),
                              dtype=np.uint16,
-                             buffer=frame_depth_data) / 10000.  # 0-10000mm to 0.-1.
+                             buffer=frame_depth_data) / 10000. # 0-10000mm to 0.-1.
+    print(depth_array)
     cv2.imshow('Depth', depth_array)
 
     ch = 0xFF & cv2.waitKey(1)
