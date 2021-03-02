@@ -1,11 +1,12 @@
 import os
 import sys
 import cv2
+import time
 import numpy as np
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, Qt
 from PyQt5.QtGui import QPixmap
-from openni import openni2, nite2, utils
+from openni import openni2
 import design
 
 
@@ -24,9 +25,13 @@ sys.excepthook = my_exception_hook
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
 
-    def __init__(self, video_path):
+    def __init__(self, video_path, is_color):
         super().__init__()
         self.directory = video_path
+        self.is_color = is_color
+        self.is_paused = False
+        self.prev_frame = False
+        self.next_frame = False
 
     def run(self):
         try:
@@ -34,26 +39,109 @@ class VideoThread(QThread):
             video_path = self.directory
             openni2.initialize()
             dev = openni2.Device.open_file(video_path.encode('utf-8'))
+            pbs = openni2.PlaybackSupport(dev)
 
-            depth_stream = dev.create_depth_stream()
-            depth_stream.start()
-            #test_image = cv2.imread(r'C:\Users\UserPC\PycharmProjects\testTask\whats-your-favourite-meme-panda-community-pogchamp-no-background-1280_720.png')
-            while True:
-                frame_depth = depth_stream.read_frame()
-                frame_depth_data = frame_depth.get_buffer_as_uint16()
-                depth_array = np.ndarray((frame_depth.height, frame_depth.width),
-                                         dtype=np.uint16,
-                                         buffer=frame_depth_data)
-                depth_array = np.array(depth_array, dtype=np.uint16)
-                depth_array = depth_array / np.max(depth_array) * 255
-                depth_array = np.array(depth_array, dtype=np.uint8)
-                ch3_img = np.stack((depth_array,) * 3, axis=-1)
-                self.change_pixmap_signal.emit(ch3_img)
+            if self.is_color:
+                image_stream = dev.create_color_stream()
+                image_stream.start()
+                numb_frame = image_stream.get_number_of_frames()
+                current_frame = 0
+                while True:
+                    if self.is_paused:
+                        while True:
+                            if not self.is_paused:
+                                break
 
-            depth_stream.stop()
-            openni2.unload()
+                            if self.prev_frame:
+                                current_frame -= 1
+                                if current_frame != numb_frame:
+                                    pbs.seek(image_stream, current_frame)
+
+                                frame_image = image_stream.read_frame()
+                                self.build_frame(frame_image)
+                                self.prev_frame = False
+
+                            if self.next_frame:
+                                current_frame += 1
+                                if current_frame != numb_frame:
+                                    pbs.seek(image_stream, current_frame)
+
+                                frame_image = image_stream.read_frame()
+                                self.build_frame(frame_image)
+                                self.next_frame = False
+
+                    if current_frame != numb_frame:
+                        pbs.seek(image_stream, current_frame)
+
+                    frame_image = image_stream.read_frame()
+                    self.build_frame(frame_image)
+                    current_frame += 1
+                    time.sleep(0.016)
+
+                image_stream.stop()
+                openni2.unload()
+
+            else:
+                depth_stream = dev.create_depth_stream()
+                depth_stream.start()
+                numb_frame = depth_stream.get_number_of_frames()
+                current_frame = 0
+                while True:
+                    if self.is_paused:
+                        while True:
+                            if not self.is_paused:
+                                break
+
+                            if self.prev_frame:
+                                current_frame -= 1
+                                if current_frame != numb_frame:
+                                    pbs.seek(depth_stream, current_frame)
+
+                                frame_depth = depth_stream.read_frame()
+                                self.build_frame(frame_depth)
+                                self.prev_frame = False
+
+                            if self.next_frame:
+                                current_frame += 1
+                                if current_frame != numb_frame:
+                                    pbs.seek(depth_stream, current_frame)
+
+                                frame_image = depth_stream.read_frame()
+                                self.build_frame(frame_image)
+                                self.next_frame = False
+
+                    if current_frame != numb_frame:
+                        pbs.seek(depth_stream, current_frame)
+
+                    frame_depth = depth_stream.read_frame()
+                    self.build_frame(frame_depth)
+                    current_frame += 1
+                    time.sleep(0.016)
+
+                depth_stream.stop()
+                openni2.unload()
         except Exception as ex:
             print(ex)
+
+    def build_frame(self, frame):
+        if self.is_color:
+            frame_image_data = frame.get_buffer_as_uint8()
+
+            image_array = np.ndarray((frame.height, frame.width, 3),
+                                     dtype=np.uint8,
+                                     buffer=frame_image_data)
+            self.change_pixmap_signal.emit(image_array)
+        else:
+            frame_depth_data = frame.get_buffer_as_uint16()
+            depth_array = np.ndarray((frame.height, frame.width),
+                                     dtype=np.uint16,
+                                     buffer=frame_depth_data)
+            depth_array = np.array(depth_array, dtype=np.uint16)
+            depth_array = depth_array / np.max(depth_array) * 255
+            depth_array = np.array(depth_array, dtype=np.uint8)
+            ch3_img = np.stack((depth_array,) * 3, axis=-1)
+            self.change_pixmap_signal.emit(ch3_img)
+
 
 
 class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
@@ -61,13 +149,19 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         super().__init__()
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
         self.btnBrowse.clicked.connect(self.browse_file)
+        self.playBtn.clicked.connect(self.play)
+        self.pauseBtn.clicked.connect(self.pause)
         self.radioButton.toggled.connect(self.switcher)
+        self.prevBtn.clicked.connect(self.move_back)
+        self.nextBtn.clicked.connect(self.move_forward)
         self.directory = None
         self.thread = None
 
     def browse_file(self):  # На случай, если в списке уже есть элементы
         self.directory = QtWidgets.QFileDialog.getOpenFileName(self, "Выберите файл", "", '*.oni')
-        self.thread = VideoThread(self.directory[0])
+        if self.thread is not None:
+            self.thread.terminate()
+        self.thread = VideoThread(self.directory[0], self.radioButton.isChecked())
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
         # start the thread
@@ -76,27 +170,21 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         # открыть диалог выбора директории и установить значение переменной
         # равной пути к выбранной директории
 
-    # def read_oni(self):
-    #     video_path = self.directory
-    #     openni2.initialize()
-    #     dev = openni2.Device.open_file(video_path.encode('utf-8'))
-    #     print(dev.get_sensor_info(openni2.SENSOR_DEPTH))
-    #
-    #     depth_stream = dev.create_depth_stream()
-    #     depth_stream.start()
-    #     while True:
-    #         frame_depth = depth_stream.read_frame()
-    #         frame_depth_data = frame_depth.get_buffer_as_uint16()
-    #         depth_array = np.ndarray((frame_depth.height, frame_depth.width),
-    #                                  dtype=np.uint16,
-    #                                  buffer=frame_depth_data) / 10000.
-    #
-    #     depth_stream.stop()
-    #     openni2.unload()
+    def play(self):
+        self.thread.is_paused = False
+
+    def pause(self):
+        self.thread.is_paused = True
 
     def switcher(self):
         radioButton = self.sender()
-        radioButton.isChecked()
+        return radioButton.isChecked()
+
+    def move_back(self):
+        self.thread.prev_frame = True
+
+    def move_forward(self):
+        self.thread.next_frame = True
 
 
     @pyqtSlot(np.ndarray)
@@ -107,7 +195,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
     def convert_cv_qt(self, cv_img: np.ndarray):
         """Convert from an opencv image to QPixmap"""
-        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        #rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         rgb_image = cv_img
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
