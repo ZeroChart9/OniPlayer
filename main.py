@@ -22,6 +22,7 @@ def my_exception_hook(exctype, value, traceback):
 
 sys.excepthook = my_exception_hook
 
+
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
 
@@ -32,6 +33,7 @@ class VideoThread(QThread):
         self.is_paused = False
         self.prev_frame = False
         self.next_frame = False
+        self.slider: QtWidgets.QSlider = None
 
     def run(self):
         try:
@@ -43,83 +45,53 @@ class VideoThread(QThread):
 
             if self.is_color:
                 image_stream = dev.create_color_stream()
-                image_stream.start()
-                numb_frame = image_stream.get_number_of_frames()
-                current_frame = 0
-                while True:
-                    if self.is_paused:
-                        while True:
-                            if not self.is_paused:
-                                break
-
-                            if self.prev_frame:
-                                current_frame -= 1
-                                if current_frame != numb_frame:
-                                    pbs.seek(image_stream, current_frame)
-
-                                frame_image = image_stream.read_frame()
-                                self.build_frame(frame_image)
-                                self.prev_frame = False
-
-                            if self.next_frame:
-                                current_frame += 1
-                                if current_frame != numb_frame:
-                                    pbs.seek(image_stream, current_frame)
-
-                                frame_image = image_stream.read_frame()
-                                self.build_frame(frame_image)
-                                self.next_frame = False
-
-                    if current_frame != numb_frame:
-                        pbs.seek(image_stream, current_frame)
-
-                    frame_image = image_stream.read_frame()
-                    self.build_frame(frame_image)
-                    current_frame += 1
-                    time.sleep(0.016)
-
-                image_stream.stop()
-                openni2.unload()
-
             else:
-                depth_stream = dev.create_depth_stream()
-                depth_stream.start()
-                numb_frame = depth_stream.get_number_of_frames()
-                current_frame = 0
-                while True:
-                    if self.is_paused:
-                        while True:
-                            if not self.is_paused:
-                                break
+                image_stream = dev.create_depth_stream()
+            image_stream.start()
+            numb_frame = image_stream.get_number_of_frames()
+            self.slider.setRange(0, numb_frame)
+            current_frame = 0
+            while True:
+                self.slider.setSliderPosition(current_frame)
+                if self.is_paused:
+                    while True:
+                        if not self.is_paused:
+                            break
 
-                            if self.prev_frame:
-                                current_frame -= 1
-                                if current_frame != numb_frame:
-                                    pbs.seek(depth_stream, current_frame)
+                        if self.prev_frame:
+                            current_frame -= 1
+                            if current_frame != numb_frame:
+                                pbs.seek(image_stream, current_frame)
 
-                                frame_depth = depth_stream.read_frame()
-                                self.build_frame(frame_depth)
-                                self.prev_frame = False
+                            frame_image = image_stream.read_frame()
+                            self.build_frame(frame_image)
+                            self.prev_frame = False
 
-                            if self.next_frame:
-                                current_frame += 1
-                                if current_frame != numb_frame:
-                                    pbs.seek(depth_stream, current_frame)
+                        if self.next_frame:
+                            current_frame += 1
+                            if current_frame != numb_frame:
+                                pbs.seek(image_stream, current_frame)
 
-                                frame_image = depth_stream.read_frame()
-                                self.build_frame(frame_image)
-                                self.next_frame = False
+                            frame_image = image_stream.read_frame()
+                            self.build_frame(frame_image)
+                            self.next_frame = False
 
-                    if current_frame != numb_frame:
-                        pbs.seek(depth_stream, current_frame)
+                if current_frame != numb_frame:
+                    pbs.seek(image_stream, current_frame)
 
-                    frame_depth = depth_stream.read_frame()
-                    self.build_frame(frame_depth)
-                    current_frame += 1
-                    time.sleep(0.016)
+                frame_image = image_stream.read_frame()
+                self.build_frame(frame_image)
 
-                depth_stream.stop()
-                openni2.unload()
+                if current_frame != self.slider.value():
+                    current_frame = self.slider.value()
+                current_frame += 1
+                time.sleep(0.016)
+                if current_frame == numb_frame:
+                    break
+
+            image_stream.stop()
+            openni2.unload()
+
         except Exception as ex:
             print(ex)
 
@@ -143,7 +115,6 @@ class VideoThread(QThread):
             self.change_pixmap_signal.emit(ch3_img)
 
 
-
 class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
@@ -154,6 +125,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.radioButton.toggled.connect(self.switcher)
         self.prevBtn.clicked.connect(self.move_back)
         self.nextBtn.clicked.connect(self.move_forward)
+        self.horizontalSlider.valueChanged[int].connect(self.value_changed)
         self.directory = None
         self.thread = None
 
@@ -162,6 +134,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         if self.thread is not None:
             self.thread.terminate()
         self.thread = VideoThread(self.directory[0], self.radioButton.isChecked())
+        self.thread.slider = self.horizontalSlider
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
         # start the thread
@@ -186,6 +159,9 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
     def move_forward(self):
         self.thread.next_frame = True
 
+    def value_changed(self, value):
+        self.thread.slider.setValue(value)
+
 
     @pyqtSlot(np.ndarray)
     def update_image(self, cv_img):
@@ -195,7 +171,6 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
     def convert_cv_qt(self, cv_img: np.ndarray):
         """Convert from an opencv image to QPixmap"""
-        #rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         rgb_image = cv_img
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
