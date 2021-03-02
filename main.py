@@ -14,9 +14,7 @@ import design
 sys._excepthook = sys.excepthook
 
 def my_exception_hook(exctype, value, traceback):
-    # Print the error and traceback
     print(exctype, value, traceback)
-    # Call the normal Exception hook after
     sys._excepthook(exctype, value, traceback)
     sys.exit(1)
 
@@ -85,7 +83,7 @@ class VideoThread(QThread):
                 if current_frame != self.slider.value():
                     current_frame = self.slider.value()
                 current_frame += 1
-                time.sleep(0.016)
+                time.sleep(0.016) # Для вывода видеоряда в 60FPS (1000(мс)/60(кдр/с)/1000)
                 if current_frame == numb_frame:
                     break
 
@@ -109,7 +107,7 @@ class VideoThread(QThread):
                                      dtype=np.uint16,
                                      buffer=frame_depth_data)
             depth_array = np.array(depth_array, dtype=np.uint16)
-            depth_array = depth_array / np.max(depth_array) * 255
+            depth_array = depth_array / np.max(depth_array) * 255  # нормализация карты глубины в диапозон 0..255
             depth_array = np.array(depth_array, dtype=np.uint8)
             ch3_img = np.stack((depth_array,) * 3, axis=-1)
             self.change_pixmap_signal.emit(ch3_img)
@@ -176,7 +174,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         bytes_per_line = ch * w
         convert_to_Qt_format = QtGui.QImage(rgb_image.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
         p = convert_to_Qt_format.scaled(self.videoWidget.width(), self.videoWidget.height(), Qt.KeepAspectRatio)
-        return QPixmap.fromImage(p) #convert_to_Qt_format)
+        return QPixmap.fromImage(p)
 
 
 def main():
