@@ -1,6 +1,4 @@
-import os
 import sys
-import cv2
 import time
 import numpy as np
 from PyQt5 import QtWidgets, QtGui
