@@ -6,6 +6,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, Qt
 from PyQt5.QtGui import QPixmap
 from openni import openni2
 import design
+import traceback as tb
 
 
 # для нормального вывода ошибок, так как разрабы поленились это сделать
@@ -26,6 +27,7 @@ class VideoThread(QThread):
         super().__init__()
         self.directory = video_path
         self.is_color = is_color
+        self.is_conf_color = is_color
         self.is_paused = False
         self.prev_frame = False
         self.next_frame = False
@@ -39,7 +41,7 @@ class VideoThread(QThread):
             dev = openni2.Device.open_file(video_path.encode('utf-8'))
             pbs = openni2.PlaybackSupport(dev)
 
-            if self.is_color:
+            if self.is_conf_color:
                 image_stream = dev.create_color_stream()
             else:
                 image_stream = dev.create_depth_stream()
@@ -48,51 +50,67 @@ class VideoThread(QThread):
             self.slider.setRange(0, numb_frame)
             current_frame = 0
             while True:
-                self.slider.setSliderPosition(current_frame)
+                if current_frame == numb_frame:
+                    self.is_paused = True
+                if self.is_color != self.is_conf_color:
+                    self.is_conf_color = self.is_color
+                    image_stream.stop()
+                    if self.is_conf_color:
+                        image_stream = dev.create_color_stream()
+                    else:
+                        image_stream = dev.create_depth_stream()
+                    image_stream.start()
+                    numb_frame = image_stream.get_number_of_frames()
+                    self.slider.setRange(0, numb_frame)
+                    pbs.seek(image_stream, current_frame)
+
                 if self.is_paused:
                     while True:
                         if not self.is_paused:
                             break
+                        if current_frame != self.slider.value():
+                            current_frame = self.slider.value()
+                            pbs.seek(image_stream, current_frame)
+                            frame_image = image_stream.read_frame()
+                            self.build_frame(frame_image)
 
                         if self.prev_frame:
-                            current_frame -= 1
-                            if current_frame != numb_frame:
-                                pbs.seek(image_stream, current_frame)
-
+                            if current_frame > 0:
+                                current_frame -= 1
+                            pbs.seek(image_stream, current_frame)
                             frame_image = image_stream.read_frame()
                             self.build_frame(frame_image)
                             self.prev_frame = False
 
                         if self.next_frame:
-                            current_frame += 1
-                            if current_frame != numb_frame:
-                                pbs.seek(image_stream, current_frame)
+                            if current_frame < numb_frame:
+                                current_frame += 1
+                            pbs.seek(image_stream, current_frame)
 
                             frame_image = image_stream.read_frame()
                             self.build_frame(frame_image)
                             self.next_frame = False
-
-                if current_frame != numb_frame:
-                    pbs.seek(image_stream, current_frame)
-
-                frame_image = image_stream.read_frame()
-                self.build_frame(frame_image)
+                        self.slider.setSliderPosition(current_frame)
 
                 if current_frame != self.slider.value():
                     current_frame = self.slider.value()
-                current_frame += 1
+                    pbs.seek(image_stream, current_frame)
+                else:
+                    current_frame += 1
+                    self.slider.setSliderPosition(current_frame)
+                frame_image = image_stream.read_frame()
+                self.build_frame(frame_image)
                 time.sleep(0.016) # Для вывода видеоряда в 60FPS (1000(мс)/60(кдр/с)/1000)
-                if current_frame == numb_frame:
-                    break
 
             image_stream.stop()
             openni2.unload()
 
         except Exception as ex:
-            print(ex)
+            error_message = tb.format_exc()
+            print(error_message)
 
     def build_frame(self, frame):
-        if self.is_color:
+        if self.is_conf_color:
             frame_image_data = frame.get_buffer_as_uint8()
 
             image_array = np.ndarray((frame.height, frame.width, 3),
@@ -118,7 +136,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.btnBrowse.clicked.connect(self.browse_file)
         self.playBtn.clicked.connect(self.play)
         self.pauseBtn.clicked.connect(self.pause)
-        self.radioButton.toggled.connect(self.switcher)
+        self.checkBox.toggled.connect(self.switcher)
         self.prevBtn.clicked.connect(self.move_back)
         self.nextBtn.clicked.connect(self.move_forward)
         self.horizontalSlider.valueChanged[int].connect(self.value_changed)
@@ -129,7 +147,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.directory = QtWidgets.QFileDialog.getOpenFileName(self, "Выберите файл", "", '*.oni')
         if self.thread is not None:
             self.thread.terminate()
-        self.thread = VideoThread(self.directory[0], self.radioButton.isChecked())
+        self.thread = VideoThread(self.directory[0], self.checkBox.isChecked())
         self.thread.slider = self.horizontalSlider
         # connect its signal to the update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
@@ -140,24 +158,40 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         # равной пути к выбранной директории
 
     def play(self):
-        self.thread.is_paused = False
+        try:
+            self.thread.is_paused = False
+        except:
+            pass
 
     def pause(self):
-        self.thread.is_paused = True
+        try:
+            self.thread.is_paused = True
+        except:
+            pass
 
     def switcher(self):
-        radioButton = self.sender()
-        return radioButton.isChecked()
+        try:
+            self.thread.is_color = self.checkBox.isChecked()
+        except:
+            pass
 
     def move_back(self):
-        self.thread.prev_frame = True
+        try:
+            self.thread.prev_frame = True
+        except:
+            pass
 
     def move_forward(self):
-        self.thread.next_frame = True
+        try:
+            self.thread.next_frame = True
+        except:
+            pass
 
     def value_changed(self, value):
-        self.thread.slider.setValue(value)
-
+        try:
+            self.thread.slider.setValue(value)
+        except:
+            pass
 
     @pyqtSlot(np.ndarray)
     def update_image(self, cv_img):
