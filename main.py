@@ -8,14 +8,15 @@ from openni import openni2
 import design
 import traceback as tb
 
-
 # для нормального вывода ошибок, так как разрабы поленились это сделать
 sys._excepthook = sys.excepthook
+
 
 def my_exception_hook(exctype, value, traceback):
     print(exctype, value, traceback)
     sys._excepthook(exctype, value, traceback)
     sys.exit(1)
+
 
 sys.excepthook = my_exception_hook
 
@@ -52,6 +53,7 @@ class VideoThread(QThread):
             while True:
                 if current_frame == numb_frame:
                     self.is_paused = True
+
                 if self.is_color != self.is_conf_color:
                     self.is_conf_color = self.is_color
                     image_stream.stop()
@@ -66,31 +68,27 @@ class VideoThread(QThread):
 
                 if self.is_paused:
                     while True:
+
                         if not self.is_paused:
                             break
+
                         if current_frame != self.slider.value():
                             current_frame = self.slider.value()
-                            pbs.seek(image_stream, current_frame)
-                            frame_image = image_stream.read_frame()
-                            self.build_frame(frame_image)
 
                         if self.prev_frame:
                             if current_frame > 0:
                                 current_frame -= 1
-                            pbs.seek(image_stream, current_frame)
-                            frame_image = image_stream.read_frame()
-                            self.build_frame(frame_image)
                             self.prev_frame = False
 
                         if self.next_frame:
                             if current_frame < numb_frame:
                                 current_frame += 1
-                            pbs.seek(image_stream, current_frame)
-
-                            frame_image = image_stream.read_frame()
-                            self.build_frame(frame_image)
                             self.next_frame = False
+
                         self.slider.setSliderPosition(current_frame)
+                        pbs.seek(image_stream, current_frame)
+                        frame_image = image_stream.read_frame()
+                        self.build_frame(frame_image)
 
                 if current_frame != self.slider.value():
                     current_frame = self.slider.value()
@@ -100,7 +98,7 @@ class VideoThread(QThread):
                     self.slider.setSliderPosition(current_frame)
                 frame_image = image_stream.read_frame()
                 self.build_frame(frame_image)
-                time.sleep(0.016) # Для вывода видеоряда в 60FPS (1000(мс)/60(кдр/с)/1000)
+                time.sleep(0.016)  # Для вывода видеоряда в 60FPS (1000(мс)/60(кдр/с)/1000)
 
             image_stream.stop()
             openni2.unload()
@@ -205,8 +203,9 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
         convert_to_Qt_format = QtGui.QImage(rgb_image.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
-        p = convert_to_Qt_format.scaled(self.videoWidget.width(), self.videoWidget.height(), Qt.KeepAspectRatio)
-        return QPixmap.fromImage(p)
+        # p = convert_to_Qt_format.scaled(self.videoWidget.width(), self.videoWidget.height(), Qt.KeepAspectRatio,
+        #                                 Qt.SmoothTransformation)
+        return QPixmap.fromImage(convert_to_Qt_format)
 
 
 def main():
